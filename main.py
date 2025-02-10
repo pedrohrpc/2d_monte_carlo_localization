@@ -32,8 +32,9 @@ class simulation:
         self.particle_icon = pygame.image.load("2d_localization/images/particle.png")
         self.particle_icon_w, self.particle_icon_h = self.particle_icon.get_size()
 
-        self.player_angle = 0
         self.field_center_pos = pygame.Vector2(self.field_w/2, self.field_h/2)
+        
+        self.player_angle = 0
         self.player_pos = pygame.Vector2(self.field_center_pos)
 
 
@@ -122,16 +123,16 @@ class simulation:
 
     def robot_fov(self):
         # Calc the are that will be cropped
-        robot_pov = fov.get_particle_pov(self.field_cv, self.player_pos, self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = False)
+        robot_pov = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = False)
 
-        robot_pov_low_res = fov.get_particle_pov(self.field_cv, self.player_pos, self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
+        robot_pov_low_res = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
         
         if self.visual_fov:
             cv.imshow("Robot Field of View", robot_pov)
             cv.imshow("Robot Field of View Low Resolution", robot_pov_low_res)
         cv.waitKey(1)
 
-        return robot_pov_low_res
+        self.robot_pov = robot_pov_low_res
     
     def particle_result(self, particle_x, particle_y, particle_angle,robot_fov):
         particle_pov = fov.get_particle_pov(self.field_cv, pygame.Vector2(particle_x, particle_y), particle_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
@@ -140,8 +141,19 @@ class simulation:
 
         return particle_pov, diff_percent
 
-    def run_particle_filter():
-        pass
+    def runParticleFilter(self, particleFilter: pf, robotVariaton = None, desvioPos = None, desvioAngle = None):
+        # Atualiza a posicao das particulas de acordo com o robo
+        # particleFilter.predict(robotVariaton,(desvioPos,desvioAngle))
+        # Testa o input das particulas (update)
+        particleFilter.testParticles(self.robot_pov, self.field_cv)
+
+        # Verifica se é necessario resample
+        if particleFilter.neff() < (N/2):
+            particleFilter.resample_from_index()
+
+        # Calcula a media e variancia
+        particleFilter.estimate()
+        
 
     def update_particles_visual(self, robot_fov, particleFilter: pf):
         aux_count = 1
@@ -178,6 +190,13 @@ if __name__ == '__main__':
     ### Simulation params
     exec_freq = 1 # times per second
     aux_count = 0
+    player_initial_x = 200
+    player_initial_y = 300
+    player_initial_angle = 0
+    playerInitPosKnown = True
+    player_x_deviation = 10
+    player_y_deviation = 10
+    player_angle_deviation = 10
 
     ### Real robot params
     fov_max_range = 500 #centimeters
@@ -185,7 +204,7 @@ if __name__ == '__main__':
     fov_angle = 90 #degrees
 
     ### Particle filter params
-    N = 100
+    N = 10
     # camHeight = 80
     # camAngle = np.pi/4
     # fov = (3/3) * np.pi
@@ -193,8 +212,9 @@ if __name__ == '__main__':
     # maxRange = camAngle * np.tan(camAngle+fov/4)
 
     sim = simulation(fov_angle, fov_min_range, fov_max_range, visual_particles=False, visual_fov=False, fps = 30)
-    particleFilter = pf(N,fov_max_range,fov_min_range,fov_max_range,
-                        previousPositionKnown=False, xRange = [0, sim.field_w], yRange = [0, sim.field_h], headingRange = [0, 360])
+    particleFilter = pf(N,fov_angle,fov_min_range,fov_max_range, initial_position_known=playerInitPosKnown, 
+                        mean = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_x_deviation,player_y_deviation,player_angle_deviation], 
+                        xRange = [0, sim.field_w], yRange = [0, sim.field_h], headingRange = [0, 360])
 
 
 
@@ -208,15 +228,16 @@ if __name__ == '__main__':
 
         sim.update_sim()
         robot_fov = sim.robot_fov()
-        particle_update_thread = threading.Thread(target=sim.update_particles_visual, args=(robot_fov, particleFilter), daemon=True)
         # print(robot_fov.max())
         # print(robot_fov.shape[0]*robot_fov.shape[1])
 
+        particle_filter_thread = threading.Thread(target=sim.runParticleFilter, args=([particleFilter]), daemon=True)
 
 
         if aux_count == sim.fps/exec_freq:
-            particle_update_thread.start()
-            print(particleFilter.weights)
+            particle_filter_thread.start() # Runing in a different thread (for performance)
+            # sim.runParticleFilter(particleFilter) # Running on the same thread (for debugging)
+            print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}')
             print(f'Neff: {particleFilter.neff()}')
             print(f'N/2: {N/2}')
             aux_count = 0

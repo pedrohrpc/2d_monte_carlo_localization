@@ -16,11 +16,10 @@ class fov_utils:
         return np.array([vertice_1, vertice_2, vertice_3, vertice_4])
 
     # Crops said FOV from the field to represent player's POV and returns it as a cv2 image
-    def get_fov(field, robot_pos, range, fov_area):
+    def get_fov(field, x, y, range, fov_area):
         border = 2*range
         field_contrast = cv.addWeighted(field, 2, np.zeros(field.shape, field.dtype), 0, -100) 
         expanded_field = cv.copyMakeBorder(field_contrast, top=border, bottom=border, left=border, right=border, borderType=cv.BORDER_CONSTANT, value=[0, 0, 0])
-        x, y = robot_pos
         x+= border
         y+= border
         cropped_field = expanded_field[(int(y)-range):(int(y)+range),(int(x)-range):(int(x)+range)]
@@ -55,13 +54,14 @@ class fov_utils:
         return compressed_image
     
     
-    def get_particle_pov(field_cv, player_pos, player_angle, fov_angle, fov_min_range, fov_max_range, low_res = True):
+    def get_particle_pov(field_cv, particle_x, particle_y, particle_angle, fov_angle, fov_min_range, fov_max_range, low_res = True):
         # Calc the are that will be cropped
-        fov_area = fov_utils.get_fov_trapezoid(player_angle, fov_angle, fov_min_range, fov_max_range)
+        fov_area = fov_utils.get_fov_trapezoid(particle_angle, fov_angle, fov_min_range, fov_max_range)
         # Get the fov (area)
-        robot_fov = fov_utils.get_fov(field_cv, player_pos, fov_max_range, fov_area)
+        robot_fov = fov_utils.get_fov(field_cv, particle_x, particle_y, fov_max_range, fov_area)
+
         # Rotate fov for comparrison
-        pov = fov_utils.cv_rotate(robot_fov, 90-player_angle)[int(fov_max_range*(1-np.sin(np.radians(fov_angle/2)))):fov_max_range-fov_min_range,int(fov_max_range*(1-np.cos(np.radians(fov_angle/2)))):int(fov_max_range*(1+np.cos(np.radians(fov_angle/2))))]
+        pov = fov_utils.cv_rotate(robot_fov, 90-particle_angle)[int(fov_max_range*(1-np.sin(np.radians(fov_angle/2)))):fov_max_range-fov_min_range,int(fov_max_range*(1-np.cos(np.radians(fov_angle/2)))):int(fov_max_range*(1+np.cos(np.radians(fov_angle/2))))]
 
         # Using low resolution for particle comparison
         if low_res: pov = fov_utils.to_low_res(pov,compress_ratio=5)
