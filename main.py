@@ -8,7 +8,7 @@ from ParticleFilter import ParticleFilter as pf
 
 
 class simulation:
-    def __init__(self, fov_angle, fov_min_range, fov_max_range, visual_particles = True, visual_fov = True, fps = 60):
+    def __init__(self, player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles = True, visual_fov = True, fps = 60):
         # pygame setup
         pygame.init()
         self.field = pygame.image.load("2d_localization/images/soccer_field.jpg")
@@ -34,15 +34,15 @@ class simulation:
 
         self.field_center_pos = pygame.Vector2(self.field_w/2, self.field_h/2)
         
-        self.player_angle = 0
-        self.player_pos = pygame.Vector2(self.field_center_pos)
+        self.player_angle = player_initial_angle
+        self.player_pos = pygame.Vector2(player_initial_x, player_initial_y)
 
 
         ### OPENCV FOV PARAMETERS ###
         self.fov_angle = fov_angle #degrees
         self.fov_min_range = fov_min_range #centimeters
         self.fov_max_range = fov_max_range #centimeters
-        self.field_cv = cv.imread("2d_localization/images/soccer_field.jpg")
+        self.field_cv = field_cv
         self.particles_visual_ready = False
 
         ## Visual features (for debugging)
@@ -153,6 +153,10 @@ class simulation:
 
         # Calcula a media e variancia
         particleFilter.estimate()
+
+        print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}')
+        print(f'Neff: {particleFilter.neff()}')
+        print(f'N/2: {N/2}')
         
 
     def update_particles_visual(self, robot_fov, particleFilter: pf):
@@ -204,15 +208,18 @@ if __name__ == '__main__':
     fov_angle = 90 #degrees
 
     ### Particle filter params
-    N = 10
+    N = 100
     # camHeight = 80
     # camAngle = np.pi/4
     # fov = (3/3) * np.pi
     # minRange = camAngle * np.tan(camAngle-fov/2)
     # maxRange = camAngle * np.tan(camAngle+fov/4)
 
-    sim = simulation(fov_angle, fov_min_range, fov_max_range, visual_particles=False, visual_fov=False, fps = 30)
-    particleFilter = pf(N,fov_angle,fov_min_range,fov_max_range, initial_position_known=playerInitPosKnown, 
+    field_cv = cv.imread("2d_localization/images/soccer_field.jpg")
+
+    sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=False, fps = 30)
+
+    particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, initial_position_known=playerInitPosKnown, 
                         mean = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_x_deviation,player_y_deviation,player_angle_deviation], 
                         xRange = [0, sim.field_w], yRange = [0, sim.field_h], headingRange = [0, 360])
 
@@ -237,9 +244,7 @@ if __name__ == '__main__':
         if aux_count == sim.fps/exec_freq:
             particle_filter_thread.start() # Runing in a different thread (for performance)
             # sim.runParticleFilter(particleFilter) # Running on the same thread (for debugging)
-            print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}')
-            print(f'Neff: {particleFilter.neff()}')
-            print(f'N/2: {N/2}')
+            
             aux_count = 0
         
         if sim.particles_visual_ready and sim.visual_particles:

@@ -1,18 +1,21 @@
 import numpy as np
+import cv2 as cv
 from filterpy.monte_carlo import systematic_resample
 from numpy.random import randn, uniform
 from math import dist
 from fov_utils import fov_utils as fov
 
 
+
 class ParticleFilter():
 
     # Contructor
-    def __init__(self, N, fov_angle, fov_min_range, fov_max_range, initial_position_known = False, mean = [0,0,0], standardDeviation = [0,0,0], xRange = 0, yRange = 0, headingRange = 0):
+    def __init__(self, N, field_cv, fov_angle, fov_min_range, fov_max_range, initial_position_known = False, mean = [0,0,0], standardDeviation = [0,0,0], xRange = 0, yRange = 0, headingRange = 0):
         self.N = N
         self.fov_angle = fov_angle
         self.fov_min_range = fov_min_range
         self.fov_max_range = fov_max_range
+        self.field_cv = field_cv
 
         # Creating initial particles
         if initial_position_known:
@@ -53,45 +56,12 @@ class ParticleFilter():
         self.particles[:, 0] += (np.cos(self.particles[:, 2]*np.pi/180) * dist).astype(int)
         self.particles[:, 1] += (np.sin(self.particles[:, 2]*np.pi/180) * dist).astype(int)
 
-    # (NOT NEEDED ANYMORE)
-    def testParticlesOld(self, answer):
-        for i, particle in enumerate(self.particles):
-            particleAnswer = []
-            particleAnswer = self.checkFOV(particle)
-            
-            '''if len(answer) != 0:
-                checking = ParticleFilter.compareIntersectionLists(answer,particleAnswer)/len(answer)
-            elif len(particleAnswer) != 0:
-                checking = 1/(1+len(particleAnswer))
-            else:
-                checking = 1'''
-            
-            intersectionsAnswer = 0
-            intersectionsParticle = 0
-
-            for intersection in answer:
-                intersectionsAnswer += intersection[2]
-
-            for intersection in particleAnswer:
-                intersectionsParticle += intersection[2]
-
-            if intersectionsAnswer == 0 and intersectionsParticle == 0:
-                checking = 1
-            else:
-                checking = 1 - abs(intersectionsAnswer-intersectionsParticle)*2/max([intersectionsAnswer,intersectionsParticle])
-
-            self.weights[i] *= checking
-            self.weights[i] += 1e-300
-
-        self.weights = np.divide(self.weights,sum(self.weights))
-
-
     # Testa todas as particulas para atualizar seus pesos (utiliza a get_partice_pov())
-    def testParticles(self, robot_fov, field_cv):
+    def testParticles(self, robot_fov):
 
         for i, particle in enumerate(self.particles):
             # Gets a matrix with the point of view (POV) of the particle            
-            particle_pov = fov.get_particle_pov(field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
+            particle_pov = fov.get_particle_pov(self.field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
             
             if particle_pov.size == 0: print('4')
             # Compares the particles pov to the robots pov to get a value that represents how similar they are
@@ -102,43 +72,6 @@ class ParticleFilter():
 
         # Normalizes the weights
         self.weights = np.divide(self.weights,sum(self.weights))
-
-    # Verifica quais intersecoes estao na linha de visao de uma unica particula (NOT NEEDED ANYMORE)
-    def checkFOV(self, particle):
-        seen = []
-        for intersection in self.intersections:
-            distance = dist((particle[0],particle[1]),intersection[0])
-            distX = particle[0] - intersection[0][0]
-            distY = particle[1] - intersection[0][1]
-            distance = (distX**2 + distY**2)**0.5
-            
-            if distance <= self.fov_max_range and distance >= self.fov_min_range:
-
-                if distX == 0 and distY<0:
-                    angle = np.pi/2
-                elif distX == 0 and distY>0:
-                    angle = -np.pi/2
-                elif distY == 0 and distX<0:
-                    angle = 0
-                elif distY == 0 and distX>0:
-                    angle = np.pi
-                elif distX<0:
-                    angle = np.arctan(distY/distX)
-                elif distX>0:
-                    angle = np.arctan(distY/distX) - np.pi*np.sign(np.arctan(distY/distX))
-                else: 
-                    pass
-
-                angle = (angle + 2*np.pi)%(2*np.pi)
-
-                limLeft = (particle[2]*np.pi/180+self.fov_angle/2)%(2*np.pi)
-                limRight = (particle[2]*np.pi/180-self.fov_angle/2)%(2*np.pi)
-                if limLeft >= limRight and angle <= limLeft and angle >= limRight:
-                    seen.append(intersection)
-                elif limLeft < limRight and (angle <= limLeft or angle >= limRight):
-                    seen.append(intersection)
-
-        return seen
 
     # Utilizada para verificar a necessidade de resample
     def neff(self):
@@ -163,19 +96,32 @@ class ParticleFilter():
 
     #### Utilities ####
 
-    # Utilizada para atualizar a posicao do robo 2D simulado
-    # def moveRobot(robot, passo):
-    #     robot[2] += passo[1]
-    #     robot[0] += int(passo[0]*np.cos(robot[2]*np.pi/180))
-    #     robot[1] += int(passo[0]*np.sin(robot[2]*np.pi/180))
-    #     return robot
+    def showParticles(self, size = 2, color = [255,0,0]):
+        self.result_field_cv = self.field_cv.copy()
+        for particle in self.particles:
+            cv.circle(self.field_cv,(particle[0],particle[1]),size,color,size)
+            cv.line(self.field_cv,(particle[0],particle[1]),(int(particle[0]+size*3*np.cos(particle[2]*np.pi/180)),int(particle[1]+size*3*np.sin(particle[2]*np.pi/180))),color,size)
 
-    # Utilizada para calcular a quantidade de elementos presentes nas duas listas (NOT NEEDED ANYMORE)
-    def compareIntersectionLists(list1, list2):
-        result = 0
-        for intersection1 in list1:
-            for intersection2 in list2:
-                if intersection1[2] == intersection2[2]:
-                    result += 1
-                    list2.remove(intersection2)
-        return result
+
+
+    def drawParticles(self, drawFov=False):
+        for particle in self.particles:
+            coloredField = self.drawParticle(particle, drawFov=drawFov)
+
+        return coloredField
+    
+    def drawParticle(self, particle, drawFov=True, color=[255,0,0], robo=False):
+        if robo: size = 3
+        else: size = 2
+
+        cv.circle(self.field_cv,(particle[0],particle[1]),size,color,size)
+
+        if drawFov:
+            cv.line(self.field_cv,(int(particle[0]+self.fov_min_range*np.cos(particle[2]*np.pi/180+self.fov_angle/2)),int(particle[1]+self.fov_min_range*np.sin(particle[2]*np.pi/180+self.fov_angle/2))),(int(particle[0]+self.fov_max_range*np.cos(particle[2]*np.pi/180+self.fov_angle/2)),int(particle[1]+self.fov_max_range*np.sin(particle[2]*np.pi/180+self.fov_angle/2))),[150,0,0],size)
+            cv.line(self.field_cv,(int(particle[0]+self.fov_min_range*np.cos(particle[2]*np.pi/180-self.fov_angle/2)),int(particle[1]+self.fov_min_range*np.sin(particle[2]*np.pi/180-self.fov_angle/2))),(int(particle[0]+self.fov_max_range*np.cos(particle[2]*np.pi/180-self.fov_angle/2)),int(particle[1]+self.fov_max_range*np.sin(particle[2]*np.pi/180-self.fov_angle/2))),[150,0,0],size)
+            cv.ellipse(self.field_cv, (particle[0],particle[1]), (self.fov_min_range,self.fov_min_range), particle[2]*np.pi/180, int(particle[2]-180*self.fov_angle/(np.pi*2)), int(particle[2]+180*self.fov_angle/(np.pi*2)), [150,0,0], size)
+            cv.ellipse(self.field_cv, (particle[0],particle[1]), (self.fov_max_range,self.fov_max_range), particle[2]*np.pi/180, int(particle[2]-180*self.fov_angle/(np.pi*2)), int(particle[2]+180*self.fov_angle/(np.pi*2)), [150,0,0], size)
+        else:
+            cv.line(self.field_cv,(particle[0],particle[1]),(int(particle[0]+size*3*np.cos(particle[2]*np.pi/180)),int(particle[1]+size*3*np.sin(particle[2]*np.pi/180))),color,size)
+
+        return self.field_cv
