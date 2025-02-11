@@ -20,11 +20,11 @@ class simulation:
 
         # Parameters
         self.dt = 0
-        self.base_speed_esc = 50
+        self.base_speed_esc = 20
         self.forward_speed_esc = self.base_speed_esc
-        self.speed_ang = 50
-        self.acceleration_esc = 50
-        self.acceleration_ang = 50
+        self.speed_ang = 20
+        self.acceleration_esc = 10
+        self.acceleration_ang = 10
         self.player = pygame.image.load("2d_localization/images/robot.png")
         self.player = pygame.transform.rotate(self.player, 90)
         self.player_w, self.player_h = self.player.get_size()
@@ -36,7 +36,8 @@ class simulation:
         
         self.player_angle = player_initial_angle
         self.player_pos = pygame.Vector2(player_initial_x, player_initial_y)
-
+        self.last_player_angle = self.player_angle
+        self.last_player_pos = self.player_pos.copy()
 
         ### OPENCV FOV PARAMETERS ###
         self.fov_angle = fov_angle #degrees
@@ -141,23 +142,36 @@ class simulation:
 
         return particle_pov, diff_percent
 
-    def runParticleFilter(self, particleFilter: pf, robotVariaton = None, desvioPos = None, desvioAngle = None):
+    def runParticleFilter(self, particleFilter: pf, robotVariaton = None):
         # Atualiza a posicao das particulas de acordo com o robo
-        # particleFilter.predict(robotVariaton,(desvioPos,desvioAngle))
+        (delta_pos, delta_angle) = self.getRobotVariation()
+        particleFilter.predict(delta_pos, delta_angle)
         # Testa o input das particulas (update)
-        particleFilter.testParticles(self.robot_pov, self.field_cv)
-
-        # Verifica se é necessario resample
-        if particleFilter.neff() < (N/2):
-            particleFilter.resample_from_index()
+        particleFilter.testParticles(self.robot_pov)
 
         # Calcula a media e variancia
         particleFilter.estimate()
+        particleFilter.particlesVisualMirror(size = 3)
+        
+        # Verifica se é necessario resample
+        if (particleFilter.neff() < (N/2) or (particleFilter.abs_deviation > 100)):
+            particleFilter.resample_from_index()
 
-        print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}')
+
+        print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}\nAbsolute deviation: {particleFilter.abs_deviation}')
         print(f'Neff: {particleFilter.neff()}')
         print(f'N/2: {N/2}')
         
+    def getRobotVariation(self):
+        (last_x, last_y) = self.last_player_pos
+        (current_x, current_y) = self.player_pos
+        delta_pos = ((current_x-last_x)**2 + (current_y-last_y)**2)**0.5
+        delta_angle = self.last_player_angle - self.player_angle
+
+        self.last_player_pos = self.player_pos.copy()
+        self.last_player_angle = self.player_angle
+        print(f'Delta pos: {delta_pos}\nDelta angle: {delta_angle}')
+        return (delta_pos, delta_angle)
 
     def update_particles_visual(self, robot_fov, particleFilter: pf):
         aux_count = 1
@@ -197,11 +211,14 @@ if __name__ == '__main__':
     player_initial_x = 200
     player_initial_y = 300
     player_initial_angle = 0
-    playerInitPosKnown = True
-    player_x_deviation = 10
-    player_y_deviation = 10
-    player_angle_deviation = 10
 
+    playerInitPosKnown = True
+    player_initial_x_deviation = 100 #Centimeters
+    player_initial_y_deviation = 100 #Centimeters
+    player_initial_angle_deviation = 10 #Degrees
+
+    player_position_deviation = 5 #Centimeters
+    player_angle_deviation = 5 #Degrees
     ### Real robot params
     fov_max_range = 500 #centimeters
     fov_min_range = 50 #centimeters
@@ -219,15 +236,14 @@ if __name__ == '__main__':
 
     sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=False, fps = 30)
 
-    particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, initial_position_known=playerInitPosKnown, 
-                        mean = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_x_deviation,player_y_deviation,player_angle_deviation], 
+    particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, player_position_deviation, player_angle_deviation, initial_position_known=playerInitPosKnown, 
+                        initial_position = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_initial_x_deviation,player_initial_y_deviation,player_initial_angle_deviation],
                         xRange = [0, sim.field_w], yRange = [0, sim.field_h], headingRange = [0, 360])
-
 
 
     while sim.running:
         # pygame.QUIT event means the user clicked X to close your window
-        pygame.display.set_caption(f'Robot position - X: {int(sim.player_pos[0])} Y: {int(sim.player_pos[0])}')
+        pygame.display.set_caption(f'Robot position - X: {int(sim.player_pos[0])} Y: {int(sim.player_pos[1])} angle: {int(sim.player_angle)}')
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -238,15 +254,15 @@ if __name__ == '__main__':
         # print(robot_fov.max())
         # print(robot_fov.shape[0]*robot_fov.shape[1])
 
-        particle_filter_thread = threading.Thread(target=sim.runParticleFilter, args=([particleFilter]), daemon=True)
 
 
         if aux_count == sim.fps/exec_freq:
+            particle_filter_thread = threading.Thread(target=sim.runParticleFilter, args=([particleFilter]), daemon=True)
             particle_filter_thread.start() # Runing in a different thread (for performance)
             # sim.runParticleFilter(particleFilter) # Running on the same thread (for debugging)
-            
             aux_count = 0
-        
+
+        cv.imshow('Particle Filter', particleFilter.result_field_cv)
         if sim.particles_visual_ready and sim.visual_particles:
             cv.imshow(f'Particles', sim.particles_visual)
         cv.waitKey(1)
