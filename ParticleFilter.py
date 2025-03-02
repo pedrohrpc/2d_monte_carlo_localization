@@ -71,7 +71,8 @@ class ParticleFilter():
             
             if particle_pov.size == 0: print('4')
             # Compares the particles pov to the robots pov to get a value that represents how similar they are
-            diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
+            # diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
+            diff = 1/(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))
 
             # Multplies the particles weight to the value obtained
             self.weights[i] *= diff

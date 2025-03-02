@@ -11,7 +11,7 @@ class simulation:
     def __init__(self, player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles = True, visual_fov = True, fps = 60):
         # pygame setup
         pygame.init()
-        self.field = pygame.image.load("2d_localization/images/soccer_field.jpg")
+        self.field = pygame.image.load("images/soccer_field.jpg")
         self.field_w, self.field_h = self.field.get_size()
         self.screen = pygame.display.set_mode((self.field_w, self.field_h))
         self.clock = pygame.time.Clock()
@@ -25,11 +25,11 @@ class simulation:
         self.speed_ang = 20
         self.acceleration_esc = 10
         self.acceleration_ang = 10
-        self.player = pygame.image.load("2d_localization/images/robot.png")
+        self.player = pygame.image.load("images/robot.png")
         self.player = pygame.transform.rotate(self.player, 90)
         self.player_w, self.player_h = self.player.get_size()
 
-        self.particle_icon = pygame.image.load("2d_localization/images/particle.png")
+        self.particle_icon = pygame.image.load("images/particle.png")
         self.particle_icon_w, self.particle_icon_h = self.particle_icon.get_size()
 
         self.field_center_pos = pygame.Vector2(self.field_w/2, self.field_h/2)
@@ -135,12 +135,44 @@ class simulation:
 
         self.robot_pov = robot_pov_low_res
     
-    def particle_result(self, particle_x, particle_y, particle_angle,robot_fov):
-        particle_pov = fov.get_particle_pov(self.field_cv, pygame.Vector2(particle_x, particle_y), particle_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
-        diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
-        diff_percent = diff*100
+    # def particle_result(self, particle_x, particle_y, particle_angle,robot_fov):
+    #     particle_pov = fov.get_particle_pov(self.field_cv, pygame.Vector2(particle_x, particle_y), particle_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
+    #     diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
+    #     diff_percent = diff*100
 
-        return particle_pov, diff_percent
+    #     return particle_pov, diff_percent
+    
+
+    # def update_particles_visual(self, robot_fov, particleFilter: pf):
+    #     aux_count = 1
+    #     weights = []
+    #     # print('particles: ')
+    #     if self.visual_particles:
+    #         horizontal_strip = np.ones((int(robot_fov.shape[0]/10),robot_fov.shape[1]), robot_fov.dtype)
+    #         l_concat = horizontal_strip.copy()
+    #         r_concat = horizontal_strip.copy()
+        
+    #     for particle in particleFilter.particles:
+    #         particle_pov, diff_percent = self.particle_result(particle[0], particle[1], particle[2],robot_fov)
+
+    #         if self.visual_particles:
+    #             print(f'partice {aux_count}:\nsum: {np.sum(particle_pov)}\ndiff: {diff_percent}%')
+    #             if (aux_count<=N/2):
+    #                 l_concat = np.concatenate((l_concat,particle_pov,horizontal_strip), axis=0)
+    #             else:
+    #                 r_concat = np.concatenate((r_concat,particle_pov,horizontal_strip), axis=0)
+    #         aux_count += 1
+            
+    #         weights.append(diff_percent/100)
+
+    #     if self.visual_particles:
+    #         vertical_strip = np.ones((l_concat.shape[0],int(l_concat.shape[1]/10)), robot_fov.dtype)
+    #         concat_result = np.concatenate((l_concat,vertical_strip,r_concat), axis=1)
+    #         self.particles_visual = concat_result
+    #         self.particles_visual_ready = True
+
+    #     particleFilter.weights = weights
+    #     particleFilter.weights = np.divide(particleFilter.weights,sum(particleFilter.weights))
 
     def runParticleFilter(self, particleFilter: pf, robotVariaton = None):
         # Atualiza a posicao das particulas de acordo com o robo
@@ -173,36 +205,6 @@ class simulation:
         print(f'Delta pos: {delta_pos}\nDelta angle: {delta_angle}')
         return (delta_pos, delta_angle)
 
-    def update_particles_visual(self, robot_fov, particleFilter: pf):
-        aux_count = 1
-        weights = []
-        # print('particles: ')
-        if self.visual_particles:
-            horizontal_strip = np.ones((int(robot_fov.shape[0]/10),robot_fov.shape[1]), robot_fov.dtype)
-            l_concat = horizontal_strip.copy()
-            r_concat = horizontal_strip.copy()
-        
-        for particle in particleFilter.particles:
-            particle_pov, diff_percent = self.particle_result(particle[0], particle[1], particle[2],robot_fov)
-
-            if self.visual_particles:
-                print(f'partice {aux_count}:\nsum: {np.sum(particle_pov)}\ndiff: {diff_percent}%')
-                if (aux_count<=N/2):
-                    l_concat = np.concatenate((l_concat,particle_pov,horizontal_strip), axis=0)
-                else:
-                    r_concat = np.concatenate((r_concat,particle_pov,horizontal_strip), axis=0)
-            aux_count += 1
-            
-            weights.append(diff_percent/100)
-
-        if self.visual_particles:
-            vertical_strip = np.ones((l_concat.shape[0],int(l_concat.shape[1]/10)), robot_fov.dtype)
-            concat_result = np.concatenate((l_concat,vertical_strip,r_concat), axis=1)
-            self.particles_visual = concat_result
-            self.particles_visual_ready = True
-
-        particleFilter.weights = weights
-        particleFilter.weights = np.divide(particleFilter.weights,sum(particleFilter.weights))
 
 if __name__ == '__main__':
     ### Simulation params
@@ -217,8 +219,8 @@ if __name__ == '__main__':
     player_initial_y_deviation = 100 #Centimeters
     player_initial_angle_deviation = 10 #Degrees
 
-    player_position_deviation = 5 #Centimeters
-    player_angle_deviation = 5 #Degrees
+    player_position_deviation = 10 #Centimeters
+    player_angle_deviation = 10 #Degrees
     ### Real robot params
     fov_max_range = 500 #centimeters
     fov_min_range = 50 #centimeters
@@ -232,7 +234,7 @@ if __name__ == '__main__':
     # minRange = camAngle * np.tan(camAngle-fov/2)
     # maxRange = camAngle * np.tan(camAngle+fov/4)
 
-    field_cv = cv.imread("2d_localization/images/soccer_field.jpg")
+    field_cv = cv.imread("images/soccer_field.jpg")
 
     sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=False, fps = 30)
 

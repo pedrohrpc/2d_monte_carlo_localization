@@ -18,7 +18,7 @@ class fov_utils:
     # Crops said FOV from the field to represent player's POV and returns it as a cv2 image
     def get_fov(field, x, y, range, fov_area):
         border = 2*range
-        field_contrast = cv.addWeighted(field, 2, np.zeros(field.shape, field.dtype), 0, -100) 
+        field_contrast = cv.addWeighted(field, 5, np.zeros(field.shape, field.dtype), 0, -150) 
         expanded_field = cv.copyMakeBorder(field_contrast, top=border, bottom=border, left=border, right=border, borderType=cv.BORDER_CONSTANT, value=[0, 0, 0])
         x+= border
         y+= border
