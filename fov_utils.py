@@ -18,7 +18,7 @@ class fov_utils:
     # Crops said FOV from the field to represent player's POV and returns it as a cv2 image
     def get_fov(field, x, y, range, fov_area):
         border = 2*range
-        field_contrast = cv.addWeighted(field, 5, np.zeros(field.shape, field.dtype), 0, -150) 
+        field_contrast = cv.addWeighted(field, 3, np.zeros(field.shape, field.dtype), 1, -240) 
         expanded_field = cv.copyMakeBorder(field_contrast, top=border, bottom=border, left=border, right=border, borderType=cv.BORDER_CONSTANT, value=[0, 0, 0])
         x+= border
         y+= border
@@ -47,7 +47,7 @@ class fov_utils:
     def to_low_res(image,compress_ratio):
         (h, w) = image.shape[:2]
         gray_image = cv.cvtColor(image,cv.COLOR_BGR2GRAY)
-        blured_image = cv.GaussianBlur(gray_image, (compress_ratio*4+1,compress_ratio*4+1), 0)
+        blured_image = cv.GaussianBlur(gray_image, (compress_ratio,compress_ratio), 0)
         # blured_image = (gray_image)
         compressed_image = cv.resize(blured_image, (int(w/compress_ratio), int(h/compress_ratio)))
         compressed_image = compressed_image/255

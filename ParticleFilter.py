@@ -69,7 +69,6 @@ class ParticleFilter():
             # Gets a matrix with the point of view (POV) of the particle            
             particle_pov = fov.get_particle_pov(self.field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
             
-            if particle_pov.size == 0: print('4')
             # Compares the particles pov to the robots pov to get a value that represents how similar they are
             # diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
             diff = 1/(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))

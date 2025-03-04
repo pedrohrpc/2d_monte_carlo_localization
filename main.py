@@ -124,12 +124,12 @@ class simulation:
 
     def robot_fov(self):
         # Calc the are that will be cropped
-        robot_pov = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = False)
+        # robot_pov = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = False)
 
         robot_pov_low_res = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
         
         if self.visual_fov:
-            cv.imshow("Robot Field of View", robot_pov)
+            # cv.imshow("Robot Field of View", robot_pov)
             cv.imshow("Robot Field of View Low Resolution", robot_pov_low_res)
         cv.waitKey(1)
 
@@ -174,7 +174,7 @@ class simulation:
     #     particleFilter.weights = weights
     #     particleFilter.weights = np.divide(particleFilter.weights,sum(particleFilter.weights))
 
-    def runParticleFilter(self, particleFilter: pf, robotVariaton = None):
+    def runParticleFilter(self, particleFilter: pf):
         # Atualiza a posicao das particulas de acordo com o robo
         (delta_pos, delta_angle) = self.getRobotVariation()
         particleFilter.predict(delta_pos, delta_angle)
@@ -208,13 +208,13 @@ class simulation:
 
 if __name__ == '__main__':
     ### Simulation params
-    exec_freq = 1 # times per second
+    exec_freq = 5 # times per second
     aux_count = 0
     player_initial_x = 200
     player_initial_y = 300
     player_initial_angle = 0
 
-    playerInitPosKnown = True
+    playerInitPosKnown = False
     player_initial_x_deviation = 100 #Centimeters
     player_initial_y_deviation = 100 #Centimeters
     player_initial_angle_deviation = 10 #Degrees
@@ -224,10 +224,10 @@ if __name__ == '__main__':
     ### Real robot params
     fov_max_range = 500 #centimeters
     fov_min_range = 50 #centimeters
-    fov_angle = 90 #degrees
+    fov_angle = 87 #degrees
 
     ### Particle filter params
-    N = 100
+    N = 50
     # camHeight = 80
     # camAngle = np.pi/4
     # fov = (3/3) * np.pi
@@ -236,7 +236,7 @@ if __name__ == '__main__':
 
     field_cv = cv.imread("images/soccer_field.jpg")
 
-    sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=False, fps = 30)
+    sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=True, fps = 30)
 
     particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, player_position_deviation, player_angle_deviation, initial_position_known=playerInitPosKnown, 
                         initial_position = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_initial_x_deviation,player_initial_y_deviation,player_initial_angle_deviation],
@@ -253,8 +253,7 @@ if __name__ == '__main__':
 
         sim.update_sim()
         robot_fov = sim.robot_fov()
-        # print(robot_fov.max())
-        # print(robot_fov.shape[0]*robot_fov.shape[1])
+        
 
 
 
