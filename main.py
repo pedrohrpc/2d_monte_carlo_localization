@@ -3,6 +3,7 @@ import pygame
 import numpy as np
 import cv2 as cv
 import threading
+from numpy.random import randn, uniform
 from fov_utils import fov_utils as fov
 from ParticleFilter import ParticleFilter as pf
 
@@ -36,6 +37,9 @@ class simulation:
         
         self.player_angle = player_initial_angle
         self.player_pos = pygame.Vector2(player_initial_x, player_initial_y)
+        self.player_x_delta = 0
+        self.player_y_delta = 0
+        self.player_angle_delta = 0
         self.last_player_angle = self.player_angle
         self.last_player_pos = self.player_pos.copy()
 
@@ -70,45 +74,61 @@ class simulation:
         # rotate and blit the image
         surf.blit(rotated_image, rotated_image_rect)
 
-    def update_sim(self):
+    def update_sim(self, pf: pf, updateParticles, frequency):
         self.screen.blit(self.field, (0,0))
         #The player walking in the field
         simulation.blitRotate(self.screen, self.player, self.player_pos,(self.player_w/2, self.player_h/2), self.player_angle) 
 
+        particle_mult = self.fps/frequency
+
         keys = pygame.key.get_pressed()
         if keys[pygame.K_w]:
             self.player_pos.y -= np.sin(np.radians(self.player_angle)) * self.forward_speed_esc * self.dt
+            # self.player_y_delta -= np.sin(np.radians(self.player_angle)) * self.forward_speed_esc * self.dt
             self.player_pos.x += np.cos(np.radians(self.player_angle)) * self.forward_speed_esc * self.dt
+            # self.player_x_delta += np.cos(np.radians(self.player_angle)) * self.forward_speed_esc * self.dt
+            
 
-        if keys[pygame.K_s]:
-            self.player_pos.y += np.sin(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
-            self.player_pos.x -= np.cos(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
+        # if keys[pygame.K_s]:
+        #     self.player_pos.y += np.sin(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
+        #     self.player_y_delta += np.sin(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
 
-        if keys[pygame.K_a]:
-            self.player_pos.y -= np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
-            self.player_pos.x += np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        #     self.player_pos.x -= np.cos(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
+        #     self.player_x_delta -= np.cos(np.radians(self.player_angle)) * self.base_speed_esc * self.dt
 
-        if keys[pygame.K_d]:
-            self.player_pos.y += np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
-            self.player_pos.x -= np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        # if keys[pygame.K_a]:
+        #     self.player_pos.y -= np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        #     self.player_y_delta -= np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+
+        #     self.player_pos.x += np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        #     self.player_x_delta += np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+
+        # if keys[pygame.K_d]:
+        #     self.player_pos.y += np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        #     self.player_y_delta += np.sin(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+
+        #     self.player_pos.x -= np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
+        #     self.player_x_delta -= np.cos(np.radians(self.player_angle+90)) * self.base_speed_esc * self.dt
 
         if keys[pygame.K_q]:
             self.player_angle += self.speed_ang * self.dt
+            self.player_angle_delta -= self.speed_ang * self.dt
         if keys[pygame.K_e]:
             self.player_angle -= self.speed_ang * self.dt
+            self.player_angle_delta += self.speed_ang * self.dt
 
 
-        # adding angular acceleration
-        if (keys[pygame.K_q] or keys[pygame.K_e]) and self.speed_ang < 150:
-            self.speed_ang += self.acceleration_ang * self.dt
-        if (keys[pygame.K_q] == False and keys[pygame.K_e] == False):
-            self.speed_ang = 50
+        # # adding angular acceleration
+        # if (keys[pygame.K_q] or keys[pygame.K_e]) and self.speed_ang < 150:
+        #     self.speed_ang += self.acceleration_ang * self.dt
+        # if (keys[pygame.K_q] == False and keys[pygame.K_e] == False):
+        #     self.speed_ang = 50
 
-        # adding escalar acceleration (forward)
-        if keys[pygame.K_w] and self.forward_speed_esc < 150:
-            self.forward_speed_esc += self.acceleration_esc * self.dt
-        if keys[pygame.K_w] == False:
-            self.forward_speed_esc = self.base_speed_esc
+        # # adding escalar acceleration (forward)
+        # if keys[pygame.K_w] and self.forward_speed_esc < 150:
+        #     self.forward_speed_esc += self.acceleration_esc * self.dt
+        # if keys[pygame.K_w] == False:
+        #     self.forward_speed_esc = self.base_speed_esc
 
         if keys[pygame.K_SPACE]:
             self.player_pos = pygame.Vector2(self.field_center_pos)
@@ -174,25 +194,34 @@ class simulation:
     #     particleFilter.weights = weights
     #     particleFilter.weights = np.divide(particleFilter.weights,sum(particleFilter.weights))
 
+    # @profile
     def runParticleFilter(self, particleFilter: pf):
-        # Atualiza a posicao das particulas de acordo com o robo
-        (delta_pos, delta_angle) = self.getRobotVariation()
-        particleFilter.predict(delta_pos, delta_angle)
-        # Testa o input das particulas (update)
-        particleFilter.testParticles(self.robot_pov)
-
-        # Calcula a media e variancia
-        particleFilter.estimate()
-        particleFilter.particlesVisualMirror(size = 3)
-        
-        # Verifica se é necessario resample
-        if (particleFilter.neff() < (N/2) or (particleFilter.abs_deviation > 100)):
+        while True:
+            # Atualiza a posicao das particulas de acordo com o robo #TODO: Colocar o deslocamento pra ser referente as teclas
+            # (delta_x, delta_y, delta_angle, deviation_x, deviation_y, deviation_angle) = self.getRobotVariation()
+            # particleFilter.predict(delta_x, delta_y, delta_angle, deviation_x, deviation_y, deviation_angle)
+            (delta_pos, delta_angle) = self.getRobotVariation()
+            particleFilter.predict(delta_pos, delta_angle)
+            
+            # Testa o input das particulas (update)
+            particleFilter.testParticles(self.robot_pov)
+            
+            # Calcula a media e variancia
+            particleFilter.estimate()
+            
+            # Verifica se é necessario resample
             particleFilter.resample_from_index()
-
-
-        print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}\nAbsolute deviation: {particleFilter.abs_deviation}')
-        print(f'Neff: {particleFilter.neff()}')
-        print(f'N/2: {N/2}')
+            # if particleFilter.neff() < (N/2):
+            #     pass
+            # else:
+            
+            particleFilter.particlesVisualMirror()
+            # self.test_count += 1
+            # if self.test_count>=20: self.running = False
+            # print(f'Best estimate: \nMean: {particleFilter.mean}\nDeviation: {particleFilter.deviation}\nAbsolute deviation: {particleFilter.abs_deviation}')
+            # print(f'Neff: {particleFilter.neff()}')
+            # print(f'N/2: {N/2}')
+            
         
     def getRobotVariation(self):
         (last_x, last_y) = self.last_player_pos
@@ -202,7 +231,20 @@ class simulation:
 
         self.last_player_pos = self.player_pos.copy()
         self.last_player_angle = self.player_angle
-        print(f'Delta pos: {delta_pos}\nDelta angle: {delta_angle}')
+        
+        # delta_x = self.player_x_delta
+        # delta_y = self.player_y_delta
+        # delta_angle = self.player_angle_delta
+
+        # self.player_x_delta = 0
+        # self.player_y_delta = 0
+        # self.player_angle_delta = 0
+
+        # deviation_x = 0.1*delta_x + 1
+        # deviation_y = 0.1*delta_y + 1
+        # deviation_angle = 0.1*delta_angle + 1
+
+        # return (delta_x, delta_y, delta_angle, deviation_x, deviation_y, deviation_angle)
         return (delta_pos, delta_angle)
 
 
@@ -210,24 +252,26 @@ if __name__ == '__main__':
     ### Simulation params
     exec_freq = 5 # times per second
     aux_count = 0
-    player_initial_x = 200
-    player_initial_y = 300
+    player_initial_x = 100
+    player_initial_y = 400
     player_initial_angle = 0
 
-    playerInitPosKnown = False
-    player_initial_x_deviation = 100 #Centimeters
-    player_initial_y_deviation = 100 #Centimeters
-    player_initial_angle_deviation = 10 #Degrees
+    playerInitPosKnown = True
+    player_initial_x_deviation = 10 #Centimeters
+    player_initial_y_deviation = 10 #Centimeters
+    player_initial_angle_deviation = 5 #Degrees
 
-    player_position_deviation = 10 #Centimeters
-    player_angle_deviation = 10 #Degrees
+    player_position_deviation = 5 #Centimeters
+    player_angle_deviation = 5 #Degrees
     ### Real robot params
-    fov_max_range = 500 #centimeters
-    fov_min_range = 50 #centimeters
+    robot_head_angle = 35 #degrees
+    robot_vertical_fov = 58 #degrees
+    robot_height = 80 #centimeters
+    fov_max_range = round(robot_height/np.tan((robot_head_angle-robot_vertical_fov/2)*np.pi/180)) #centimeters
+    fov_min_range = round(robot_height/np.tan((robot_head_angle+robot_vertical_fov/2)*np.pi/180)) #centimeters
     fov_angle = 87 #degrees
-
     ### Particle filter params
-    N = 50
+    N = 100
     # camHeight = 80
     # camAngle = np.pi/4
     # fov = (3/3) * np.pi
@@ -236,11 +280,16 @@ if __name__ == '__main__':
 
     field_cv = cv.imread("images/soccer_field.jpg")
 
-    sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, field_cv, visual_particles=False, visual_fov=True, fps = 30)
+    sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, 
+                     field_cv, visual_particles=False, visual_fov=True, fps = 30)
 
     particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, player_position_deviation, player_angle_deviation, initial_position_known=playerInitPosKnown, 
-                        initial_position = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_initial_x_deviation,player_initial_y_deviation,player_initial_angle_deviation],
-                        xRange = [0, sim.field_w], yRange = [0, sim.field_h], headingRange = [0, 360])
+                        initial_position = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_initial_x_deviation,player_initial_y_deviation,player_initial_angle_deviation])
+
+    sim.update_sim(particleFilter, updateParticles=((aux_count%sim.fps/exec_freq)==0),frequency=exec_freq)
+    robot_fov = sim.robot_fov()
+    particle_filter_thread = threading.Thread(target=sim.runParticleFilter, args=([particleFilter]), daemon=True)
+    # particle_filter_thread.start() # Runing in a different thread (for performance)
 
 
     while sim.running:
@@ -251,19 +300,10 @@ if __name__ == '__main__':
             if event.type == pygame.QUIT:
                 sim.running = False
 
-        sim.update_sim()
+        sim.update_sim(particleFilter, updateParticles=((aux_count%sim.fps/exec_freq)==0),frequency=exec_freq)
         robot_fov = sim.robot_fov()
-        
 
-
-
-        if aux_count == sim.fps/exec_freq:
-            particle_filter_thread = threading.Thread(target=sim.runParticleFilter, args=([particleFilter]), daemon=True)
-            particle_filter_thread.start() # Runing in a different thread (for performance)
-            # sim.runParticleFilter(particleFilter) # Running on the same thread (for debugging)
-            aux_count = 0
-
-        cv.imshow('Particle Filter', particleFilter.result_field_cv)
+        # cv.imshow('Particle Filter', particleFilter.result_field_cv)
         if sim.particles_visual_ready and sim.visual_particles:
             cv.imshow(f'Particles', sim.particles_visual)
         cv.waitKey(1)

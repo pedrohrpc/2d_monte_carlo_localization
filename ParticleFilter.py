@@ -11,12 +11,13 @@ class ParticleFilter():
 
     # Contructor
     def __init__(self, N, field_cv, fov_angle, fov_min_range, fov_max_range, player_position_deviation, player_angle_deviation, 
-                 initial_position_known = False, initial_position = [0,0,0], standardDeviation = [0,0,0], xRange = 0, yRange = 0, headingRange = 0):
+                 initial_position_known = False, initial_position = [0,0,0], standardDeviation = [0,0,0]):
         self.N = N
         self.fov_angle = fov_angle
         self.fov_min_range = fov_min_range
         self.fov_max_range = fov_max_range
         self.field_cv = field_cv
+        self.field_h, self.field_w, c = self.field_cv.shape
         self.result_field_cv = self.field_cv.copy()
 
         self.player_position_deviation = player_position_deviation #Centimeters
@@ -27,20 +28,21 @@ class ParticleFilter():
         if initial_position_known:
             self.particles = self.create_gaussian_particles(initial_position)
         else:
-            self.particles = self.create_uniform_particles(xRange, yRange, headingRange)
+            self.particles = self.create_uniform_particles()
 
         # Creating weights array
         self.weights = [1]*len(self.particles)
         self.weights = np.divide(self.weights,sum(self.weights))
 
     # Gera particulas com distribuicao uniforme
-    def create_uniform_particles(self, xRange, yRange, headingRange):
+    def create_uniform_particles(self):
         particles = np.empty((self.N, 3))
-        particles[:, 0] = uniform(xRange[0], xRange[1], size=self.N)
-        particles[:, 1] = uniform(yRange[0], yRange[1], size=self.N)
-        particles[:, 2] = uniform(headingRange[0], headingRange[1], size=self.N)
+        particles[:, 0] = uniform(0, self.field_w, size=self.N)
+        particles[:, 1] = uniform(0, self.field_h, size=self.N)
+        particles[:, 2] = uniform(0, 360, size=self.N)
         particles[:, 2] += 360
         particles[:, 2] %= 360
+        print(particles[:,0].max())
         return particles.astype(int)
 
     # Gera particulas com distribuicao gaussiana, utilizando uma media e um desvio padrao
@@ -54,30 +56,52 @@ class ParticleFilter():
         return particles.astype(int)
 
     # Preve a posicao das particulas de acordo com a movimentacao do robo, com um erro
+    def predict(self, delta_x, delta_y, delta_angle, deviation_x, deviation_y, deviation_angle):
+        self.particles[:, 2] += (delta_angle + (randn(self.N) * deviation_angle)).astype(int)
+        self.particles[:, 2] %= 360
+
+        self.particles[:, 0] += (delta_x + (randn(self.N) * deviation_x)).astype(int)
+        self.particles[:, 1] += (delta_y + (randn(self.N) * deviation_y)).astype(int)
+
     def predict(self, delta_pos, delta_angle):
-        self.particles[:, 2] += (delta_angle + (randn(self.N) * self.player_angle_deviation)).astype(int)
+        self.particles[:, 2] += (delta_angle + (randn(self.N) * self.player_angle_deviation)).round().astype(int)
         self.particles[:, 2] %= 360
 
         dist = delta_pos + (randn(self.N) * self.player_position_deviation)
-        self.particles[:, 0] += (np.cos(self.particles[:, 2]*np.pi/180) * dist).astype(int)
-        self.particles[:, 1] += (np.sin(self.particles[:, 2]*np.pi/180) * dist).astype(int)
+        self.particles[:, 0] += (np.cos(self.particles[:, 2]*np.pi/180) * dist).round().astype(int)
+        self.particles[:, 1] += (np.sin(self.particles[:, 2]*np.pi/180) * dist).round().astype(int)
 
     # Testa todas as particulas para atualizar seus pesos (utiliza a get_partice_pov())
     def testParticles(self, robot_fov):
 
-        for i, particle in enumerate(self.particles):
-            # Gets a matrix with the point of view (POV) of the particle            
-            particle_pov = fov.get_particle_pov(self.field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
+        # for i, particle in enumerate(self.particles):
+        #     # Gets a matrix with the point of view (POV) of the particle            
+        #     particle_pov = fov.get_particle_pov(self.field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
             
-            # Compares the particles pov to the robots pov to get a value that represents how similar they are
-            # diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
-            diff = 1/(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))
+        #     # Compares the particles pov to the robots pov to get a value that represents how similar they are
+        #     # diff = (1-(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))/(robot_fov.shape[0]*robot_fov.shape[1]/(180/self.fov_angle)))**2
+        #     diff = 1/(np.sum(np.abs(np.subtract(robot_fov,particle_pov))))
 
-            # Multplies the particles weight to the value obtained
-            self.weights[i] *= diff
+        #     # Multplies the particles weight to the value obtained
+        #     self.weights[i] *= diff
 
+        self.robot_pov = robot_fov
+        new_weights = np.apply_along_axis(self.testParticle,1,self.particles)
+        self.weights = np.multiply(self.weights,new_weights)
+        
         # Normalizes the weights
         self.weights = np.divide(self.weights,sum(self.weights))
+
+    def testParticle(self,particle):
+        # TODO: Testar a abordagem de distância
+        # (max_y, max_x) = self.field_cv.shape[:2]
+        # if (particle[0] > max_x) or (particle[0] < 0) or (particle[1] > max_y) or (particle[1] < 0):
+        #     diff = 1e-10
+        # else:
+        particle_pov = fov.get_particle_pov(self.field_cv, particle[0], particle[1], particle[2], self.fov_angle, self.fov_min_range, self.fov_max_range)
+        diff = 1/(np.sum(np.abs(np.subtract(self.robot_pov,particle_pov)))+1e-50)
+        # print(diff)
+        return diff    
 
     # Utilizada para verificar a necessidade de resample
     def neff(self):
@@ -103,33 +127,12 @@ class ParticleFilter():
 
     #### Utilities ####
 
-    def particlesVisualMirror(self, size = 2, thickness = 3, particle_color = [255,0,0], estimate_localization_color = [0,100,200]):
+    def particlesVisualMirror(self, thickness = 3, estimate_localization_color = [0,100,200]):
         self.result_field_cv = self.field_cv.copy()
-        for particle in self.particles:
-            cv.circle(self.result_field_cv,(particle[0],particle[1]),size,particle_color,thickness)
-            cv.line(self.result_field_cv,(particle[0],particle[1]),(int(particle[0]+size*3*np.cos(particle[2]*np.pi/180)),int(particle[1]+size*3*np.sin(particle[2]*np.pi/180))),particle_color,thickness)
-
+        np.apply_along_axis(self.drawParticle,1,self.particles)
         cv.circle(self.result_field_cv,(int(self.mean[0]),int(self.mean[1])),int(self.abs_deviation),estimate_localization_color,thickness)
 
-
-    def drawParticles(self, drawFov=False):
-        for particle in self.particles:
-            coloredField = self.drawParticle(particle, drawFov=drawFov)
-
-        return coloredField
-    
-    def drawParticle(self, particle, drawFov=True, color=[255,0,0], robo=False):
-        if robo: size = 3
-        else: size = 2
-
-        cv.circle(self.field_cv,(particle[0],particle[1]),size,color,size)
-
-        if drawFov:
-            cv.line(self.field_cv,(int(particle[0]+self.fov_min_range*np.cos(particle[2]*np.pi/180+self.fov_angle/2)),int(particle[1]+self.fov_min_range*np.sin(particle[2]*np.pi/180+self.fov_angle/2))),(int(particle[0]+self.fov_max_range*np.cos(particle[2]*np.pi/180+self.fov_angle/2)),int(particle[1]+self.fov_max_range*np.sin(particle[2]*np.pi/180+self.fov_angle/2))),[150,0,0],size)
-            cv.line(self.field_cv,(int(particle[0]+self.fov_min_range*np.cos(particle[2]*np.pi/180-self.fov_angle/2)),int(particle[1]+self.fov_min_range*np.sin(particle[2]*np.pi/180-self.fov_angle/2))),(int(particle[0]+self.fov_max_range*np.cos(particle[2]*np.pi/180-self.fov_angle/2)),int(particle[1]+self.fov_max_range*np.sin(particle[2]*np.pi/180-self.fov_angle/2))),[150,0,0],size)
-            cv.ellipse(self.field_cv, (particle[0],particle[1]), (self.fov_min_range,self.fov_min_range), particle[2]*np.pi/180, int(particle[2]-180*self.fov_angle/(np.pi*2)), int(particle[2]+180*self.fov_angle/(np.pi*2)), [150,0,0], size)
-            cv.ellipse(self.field_cv, (particle[0],particle[1]), (self.fov_max_range,self.fov_max_range), particle[2]*np.pi/180, int(particle[2]-180*self.fov_angle/(np.pi*2)), int(particle[2]+180*self.fov_angle/(np.pi*2)), [150,0,0], size)
-        else:
-            cv.line(self.field_cv,(particle[0],particle[1]),(int(particle[0]+size*3*np.cos(particle[2]*np.pi/180)),int(particle[1]+size*3*np.sin(particle[2]*np.pi/180))),color,size)
-
-        return self.field_cv
+    def drawParticle(self, particle, size = 2, thickness = 2):
+        particle_color = [255,0,0]
+        cv.circle(self.result_field_cv,(particle[0],particle[1]),size,particle_color,thickness)
+        # cv.line(self.result_field_cv,(particle[0],particle[1]),(int(particle[0]+size*3*np.cos(particle[2]*np.pi/180)),int(particle[1]+size*3*np.sin(particle[2]*np.pi/180))),particle_color,thickness)
