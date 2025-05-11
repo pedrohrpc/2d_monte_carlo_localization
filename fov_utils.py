@@ -1,5 +1,6 @@
 import cv2 as cv
 import numpy as np
+from Line import Line
 
 class fov_utils:
 
@@ -64,8 +65,8 @@ class fov_utils:
         fov_area = np.array([vertice_1, vertice_2, vertice_3, vertice_4])
 
         gray_field = cv.cvtColor(field_cv,cv.COLOR_BGR2GRAY)
-        ret, gray_field = cv.threshold(gray_field,130,205,cv.THRESH_BINARY)
-        gray_field = gray_field+50
+        ret, gray_field = cv.threshold(gray_field,130,255,cv.THRESH_BINARY)
+        # gray_field = gray_field+50
         # gray_field = cv.dilate(gray_field,np.ones((7, 7), np.uint8))
 
         # Get the fov (area)
@@ -90,12 +91,52 @@ class fov_utils:
 
         # Using low resolution for particle comparison
         # if low_res: pov = fov_utils.to_low_res(pov,compress_ratio=5)
-        compress_ratio = 5
-        (h, w) = cropped_pov.shape[:2]
+        # compress_ratio = 5
+        # (h, w) = cropped_pov.shape[:2]
         
         # compressed_image = cv.resize(cropped_pov, (int(w/compress_ratio), int(h/compress_ratio)))
         # result_pov = compressed_image/255
-        result_pov = cropped_pov/255
          
         
-        return result_pov
+        return cropped_pov
+
+    def get_lines_in_pov(robot_pov: np.ndarray, slope_threshold = 50, dist_treshold = 40):
+
+        edges = cv.Canny(robot_pov, 50, 200, None, 3)
+
+        edges_colored = cv.cvtColor(edges, cv.COLOR_GRAY2BGR)
+
+        linesP = cv.HoughLinesP(edges, 1, np.pi / 180, 80, None, 30, 5)
+        linesFiltered = []
+        if linesP is not None:
+            # print(f'number of lines: {len(linesP)}')
+            for line in linesP:
+                initPoint = np.asarray([line[0][0],line[0][1]])
+                endPoint = np.asarray([line[0][2],line[0][3]])
+                lineL = Line(initPoint,endPoint)
+                match = False
+
+                for lineR in linesFiltered:
+                    if (abs(lineL.slope - lineR.slope) <= slope_threshold) or (abs(lineL.slope - lineR.slope) >= (360-slope_threshold)):
+
+                        if (lineL.dist_to_point(lineR.initPoint) <= dist_treshold):
+                            linesFiltered.remove(lineR)
+                            linesFiltered.append(Line.join_lines(lineL,lineR))
+                            match = True
+
+                if not match:
+                    linesFiltered.append(lineL)
+
+            for line in linesFiltered:
+                cv.line(edges_colored, line.initPoint, line.endPoint, (0,0,255), 2)
+        
+        circles = cv.HoughCircles(robot_pov,cv.HOUGH_GRADIENT,1,50,param1=50,param2=30,minRadius=0,maxRadius=0)
+        if circles is not None:
+            circles = np.uint16(np.around(circles))
+            for i in circles[0,:]:
+                cv.circle(edges_colored,(i[0],i[1]),i[2],(0,0,255),2)
+                cv.circle(edges_colored,(i[0],i[1]),4,(0,0,255),4)
+
+
+        return edges_colored, linesFiltered
+    

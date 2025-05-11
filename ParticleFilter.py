@@ -124,6 +124,17 @@ class ParticleFilter():
         self.abs_deviation = (self.deviation[0]**2 + self.deviation[1]**2)**0.5
 
 
+    def get_metrics_from_lines(lines, particle):
+        metrics = []
+        for line in lines:
+            slope = round(((line.slope-particle[2]+90)+360)%360,3)
+            metrics.append((line.dist_to_point([particle[0], particle[1]]),slope))
+        dtype = [('dist', float), ('slope', float)]
+        metrics = np.array(metrics,dtype=dtype)
+        metrics = np.sort(metrics,order='dist')
+
+        return metrics
+
 
     #### Utilities ####
 

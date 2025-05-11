@@ -147,10 +147,16 @@ class simulation:
         # robot_pov = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = False)
 
         robot_pov_low_res = fov.get_particle_pov(self.field_cv, self.player_pos[0], self.player_pos[1], self.player_angle, self.fov_angle, self.fov_min_range, self.fov_max_range, low_res = True)
+        (pov_h, pov_w) = robot_pov_low_res.shape[:2]
+        result_pov, lines = fov.get_lines_in_pov(robot_pov_low_res)
+
+        metrics = pf.get_metrics_from_lines(lines,[pov_w/2, self.fov_min_range+pov_h, 90])
         
+        # for line in lines:
+        #     print(line)
         if self.visual_fov:
             # cv.imshow("Robot Field of View", robot_pov)
-            cv.imshow("Robot Field of View Low Resolution", robot_pov_low_res)
+            cv.imshow("Robot Field of View Low Resolution", result_pov)
         cv.waitKey(1)
 
         self.robot_pov = robot_pov_low_res
@@ -271,7 +277,7 @@ if __name__ == '__main__':
     fov_min_range = round(robot_height/np.tan((robot_head_angle+robot_vertical_fov/2)*np.pi/180)) #centimeters
     fov_angle = 87 #degrees
     ### Particle filter params
-    N = 100
+    N = 10
     # camHeight = 80
     # camAngle = np.pi/4
     # fov = (3/3) * np.pi
@@ -281,7 +287,7 @@ if __name__ == '__main__':
     field_cv = cv.imread("images/soccer_field.jpg")
 
     sim = simulation(player_initial_x,player_initial_y,player_initial_angle, fov_angle, fov_min_range, fov_max_range, 
-                     field_cv, visual_particles=False, visual_fov=True, fps = 30)
+                     field_cv, visual_particles=False, visual_fov=True, fps = 60)
 
     particleFilter = pf(N, field_cv,fov_angle,fov_min_range,fov_max_range, player_position_deviation, player_angle_deviation, initial_position_known=playerInitPosKnown, 
                         initial_position = [player_initial_x,player_initial_y,player_initial_angle], standardDeviation = [player_initial_x_deviation,player_initial_y_deviation,player_initial_angle_deviation])
