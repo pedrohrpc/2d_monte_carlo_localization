@@ -55,7 +55,10 @@ class fov_utils:
         return compressed_image
     
     
-    def get_particle_pov(field_cv, particle_x, particle_y, particle_angle, fov_angle, fov_min_range, fov_max_range, low_res = True):
+    def get_particle_pov(field_cv, particle, fov_angle, fov_min_range, fov_max_range, low_res = True):
+
+        [particle_x, particle_y, particle_angle] = particle
+        particle_angle = -particle_angle
         # Calc the are that will be cropped
         x, y = (fov_max_range, fov_max_range)
         vertice_1 = (int(x+fov_min_range*np.cos(np.radians(particle_angle+fov_angle/2))), int(y-fov_min_range*np.sin(np.radians(particle_angle+fov_angle/2))))
@@ -87,39 +90,30 @@ class fov_utils:
         M = cv.getRotationMatrix2D(center, 90-particle_angle, 1)
         pov = cv.warpAffine(particle_fov, M, (w, h))
         cropped_pov = pov[int(fov_max_range*(1-np.sin(np.radians(fov_angle/2)))):fov_max_range-fov_min_range,int(fov_max_range*(1-np.cos(np.radians(fov_angle/2)))):int(fov_max_range*(1+np.cos(np.radians(fov_angle/2))))]
-
-
-        # Using low resolution for particle comparison
-        # if low_res: pov = fov_utils.to_low_res(pov,compress_ratio=5)
-        # compress_ratio = 5
-        # (h, w) = cropped_pov.shape[:2]
-        
-        # compressed_image = cv.resize(cropped_pov, (int(w/compress_ratio), int(h/compress_ratio)))
-        # result_pov = compressed_image/255
-         
         
         return cropped_pov
 
-    def get_lines_in_pov(robot_pov: np.ndarray, slope_threshold = 50, dist_treshold = 40):
+    def get_lines_in_pov(robot_pov: np.ndarray, slope_threshold = 50, dist_treshold = 20):
 
-        edges = cv.Canny(robot_pov, 50, 200, None, 3)
+        # edges = cv.Canny(robot_pov, 50, 200, None, 3)
+        edges = cv.erode(robot_pov,np.ones((3,3)))
 
         edges_colored = cv.cvtColor(edges, cv.COLOR_GRAY2BGR)
 
-        linesP = cv.HoughLinesP(edges, 1, np.pi / 180, 80, None, 30, 5)
+        linesP = cv.HoughLinesP(edges, 1, np.pi / 180, 85, None, 20, 1)
         linesFiltered = []
         if linesP is not None:
             # print(f'number of lines: {len(linesP)}')
             for line in linesP:
-                initPoint = np.asarray([line[0][0],line[0][1]])
-                endPoint = np.asarray([line[0][2],line[0][3]])
-                lineL = Line(initPoint,endPoint)
+                init_point = np.asarray([line[0][0],line[0][1]])
+                end_point = np.asarray([line[0][2],line[0][3]])
+                lineL = Line(init_point,end_point)
                 match = False
 
                 for lineR in linesFiltered:
                     if (abs(lineL.slope - lineR.slope) <= slope_threshold) or (abs(lineL.slope - lineR.slope) >= (360-slope_threshold)):
-
-                        if (lineL.dist_to_point(lineR.initPoint) <= dist_treshold):
+                        smallest_distance_between_line_points = min(cv.norm(lineL.init_point-lineR.end_point),cv.norm(lineL.init_point-lineR.init_point),cv.norm(lineL.end_point-lineR.end_point),cv.norm(lineL.end_point-lineR.init_point))
+                        if (lineL.dist_to_point(lineR.init_point) <= dist_treshold) and (smallest_distance_between_line_points <= dist_treshold):
                             linesFiltered.remove(lineR)
                             linesFiltered.append(Line.join_lines(lineL,lineR))
                             match = True
@@ -128,15 +122,18 @@ class fov_utils:
                     linesFiltered.append(lineL)
 
             for line in linesFiltered:
-                cv.line(edges_colored, line.initPoint, line.endPoint, (0,0,255), 2)
+                cv.line(edges_colored, line.init_point, line.end_point, (0,0,255), 2)
         
-        circles = cv.HoughCircles(robot_pov,cv.HOUGH_GRADIENT,1,50,param1=50,param2=30,minRadius=0,maxRadius=0)
+        circles = cv.HoughCircles(robot_pov,cv.HOUGH_GRADIENT_ALT,1.5,1000,param1=300,param2=0.6,minRadius=50,maxRadius=100)
+        feature_center = None
         if circles is not None:
             circles = np.uint16(np.around(circles))
             for i in circles[0,:]:
                 cv.circle(edges_colored,(i[0],i[1]),i[2],(0,0,255),2)
                 cv.circle(edges_colored,(i[0],i[1]),4,(0,0,255),4)
+                feature_center = np.asarray([i[0],i[1]])
+                
+        
 
-
-        return edges_colored, linesFiltered
+        return edges_colored, linesFiltered, feature_center
     

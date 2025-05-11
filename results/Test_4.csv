@@ -1,0 +1,10 @@
+,robot_pos,estimated_mean,estimated_abs_deviation,positional_error,robot_found,horizontal_tendency,vertical_tendency,resample_method,sensor_resetting,new_samples_amount,comment,delta_time
+0,[480 436 315],[791 392 193],194.17358676254798,68.35202996254024,False,right,unknown,ESS insuficiente,True,75,starting - ,64.79448676109314
+1,[480 436 315],[732 368 165],56.59521760342752,5.0,True,right,unknown,Amostras aceitaveis,True,0,,475.4749598503113
+2,[480 436 315],[717 377 139],30.18370070774322,5.830951894845301,True,right,unknown,Amostras aceitaveis,True,0,,23.419063568115234
+3,[480 436 315],[676 486 110],26.82800826650069,30.463092423455635,True,right,down,Amostras aceitaveis,False,0,,28.37746286392212
+4,[480 436 315],[515 601 144],34.38133703494449,27.892651361962706,True,unknown,down,Amostras aceitaveis,False,0,,20.714880228042603
+5,[480 436 315],[391 564 197],34.959888364751635,15.264337522473747,True,left,down,Amostras aceitaveis,False,0,,22.7897367477417
+6,[480 436 315],[395 566 310],31.124757289968546,11.180339887498949,True,left,down,Qualidade de sensor insuficiente,False,10,,15.649408102035522
+7,[480 436 315],[412 545 311],31.36330214987357,11.180339887498949,True,left,down,Amostras aceitaveis,False,0,,24.504486799240112
+8,[480 436 315],[485 444 308],27.319880913444713,9.433981132056603,True,left,down,Amostras aceitaveis,False,0,,20.27156114578247
